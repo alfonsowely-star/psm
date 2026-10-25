@@ -327,8 +327,8 @@ def match_pairs(X, t):
         L = np.linalg.cholesky(np.linalg.inv(S))
     except np.linalg.LinAlgError:
         L = np.eye(Xc.shape[1])
-    Zc = Xc @ L.T
-    Zt = X[treated_idx] @ L.T
+    Zc = Xc @ L
+    Zt = X[treated_idx] @ L
     tree = cKDTree(Zc)
     _, j = tree.query(Zt, k=1)
     j = np.atleast_1d(j)
