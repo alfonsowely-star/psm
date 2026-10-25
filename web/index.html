@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Agent 配平工具</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Agent 配平 <span class="brand-sub">把新老两拨人配成可比的两队</span></div>
+    <div>
+      <button class="btn btn-ghost" id="btn-guide">新手引导</button>
+      <button class="btn btn-ghost" id="btn-restart">重新开始</button>
+      <button class="btn btn-ghost" id="btn-selfcheck">引擎自检</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="card hidden" id="guide-box">
+      <h2 class="card-title">新手引导 · 怎么填</h2>
+      <p>工具做一件事：把「新 agent 处理的进线」和「老 agent 处理的进线」，按维度配成<b>可比的两队</b>，输出谁配谁。</p>
+
+      <h3 class="guide-h3">原理 · 为什么不能直接比</h3>
+      <p>新 agent 不是随机上线的，它先推给了特定的人（高会员、特定意图等）。所以「新 agent 处理的进线」和「老 agent 处理的进线」<b>本来就不是一拨人</b>，直接比它们的结果不公平。</p>
+      <p><b>工具做的事</b>：给每条「新 agent 的进线」，在「老 agent 的进线」里找一个<b>其他维度上最像</b>的，配成一对。配完后两队就「长得一样」了（除了一个是新、一个是老）。你再拿这两队去比任何结果（转人工、满意度），差异才能归到 agent 本身，而不是人的差异。</p>
+      <div class="alert"><b>打个比方</b>：新教练只教尖子生、老教练教普通生。直接比考试成绩，新教练必胜——但那是学生底子好，不是教练好。工具就是给每个尖子生，在普通生里配一个「基础、学习时长都一样」的，配完再比谁进步大，才公平。</div>
+
+      <h3 class="guide-h3">数据：一行 = 一条进线（实例）</h3>
+      <table class="data">
+        <tr><th>列</th><th>必需</th><th>含义</th></tr>
+        <tr><td>session_id / user_id</td><td>建议</td><td>实例 id（配对结果的标识）</td></tr>
+        <tr><td>agent</td><td><strong>必需</strong></td><td>谁处理的：新 agent=1，老 agent=0</td></tr>
+        <tr><td>member_level 等</td><td>维度</td><td>用来配对的进线特征，多选无妨</td></tr>
+      </table>
+      <h3 class="guide-h3">映射列怎么填</h3>
+      <table class="data">
+        <tr><th>字段</th><th>怎么填</th></tr>
+        <tr><td>实例列 id_col</td><td>选标识每条进线的那列（session_id 或 user_id）</td></tr>
+        <tr><td>处理方列 treat_col</td><td>选「谁被分到新 agent 灰度组」那列（0/1），不是实际谁处理</td></tr>
+        <tr><td>新 agent 取值</td><td>新 agent 在这列里的值：0/1 填 1，old/new 填 new</td></tr>
+        <tr><td>维度 cov_cols</td><td>勾「进线时就确定」的特征，多选无妨</td></tr>
+      </table>
+      <div class="alert"><strong>三条铁律</strong>：① 处理方列是唯一不可缺的列；② 「新 agent」填「是否被分到灰度组」（可以触发），<b>不要填「实际谁处理」（触发过）</b>——新 agent 会把难问题转人工，按实际处理算会把难问题踢掉、只剩简单问题；③ 维度只能放「进线时就已知」的特征。</div>
+      <p class="hint">完整文档：docs/GUIDE.md</p>
+    </section>
+
+    <ol class="steps">
+      <li class="step active" data-goto="1">① 导入数据</li>
+      <li class="step" data-goto="2">② 映射列</li>
+      <li class="step" data-goto="3">③ 结果</li>
+    </ol>
+
+    <section class="card" id="s2">
+      <h2 class="card-title">① 导入数据</h2>
+      <p class="hint">每行一条进线。粘贴 CSV 或 JSONL，或选择文件——会自动解析。</p>
+      <input type="file" id="file-input" accept=".csv,.jsonl,.ndjson,.json,.txt">
+      <textarea id="data-text" rows="8" placeholder="session_id,agent,member_level,prev_effective,intent&#10;s_001,1,3,1,complaint&#10;s_002,0,2,0,consult"></textarea>
+      <button class="btn btn-ghost" id="btn-parse">重新解析</button>
+      <div id="parse-result" class="hint"></div>
+      <div id="columns-view"></div>
+      <button class="btn btn-primary hidden" id="btn-s2">下一步：映射列</button>
+    </section>
+
+    <section class="card hidden" id="s3">
+      <h2 class="card-title">② 映射列</h2>
+      <div class="form-grid">
+        <label>实例列 id_col（哪列是实例标识）<select id="c-id"></select></label>
+        <label>处理方列 treat_col（填灰度分组：谁被分到新 agent，不是实际谁处理）<select id="c-treat"></select></label>
+        <label>新 agent 取值 treat_value <input id="c-treatval" placeholder="1"></label>
+      </div>
+      <label>维度 cov_cols（用来配对的进线特征，可多选）</label>
+      <div id="cov-checks"></div>
+      <button class="btn btn-primary" id="btn-run">运行配对</button>
+      <div id="run-status" class="hint"></div>
+    </section>
+
+    <section class="card hidden" id="s4">
+      <h2 class="card-title">③ 结果</h2>
+      <button class="btn btn-ghost" id="btn-back-edit">← 返回修改映射</button>
+      <div id="report-summary"></div>
+      <iframe id="report-frame" title="报告"></iframe>
+    </section>
+
+    <section class="card hidden" id="selfcheck-box">
+      <h2 class="card-title">引擎自检</h2>
+      <pre id="selfcheck-out"></pre>
+    </section>
+
+    <section class="card">
+      <h2 class="card-title">历史运行</h2>
+      <ul id="runs-list"></ul>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

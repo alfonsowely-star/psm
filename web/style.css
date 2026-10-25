@@ -1,0 +1,87 @@
+:root {
+  --primary: #4f5bd5;
+  --primary-hover: #3f49b8;
+  --primary-subtle: #eef0fd;
+  --ink: #17181c;
+  --ink-muted: #4a4f57;
+  --ink-subtle: #8a8f98;
+  --canvas: #f7f8fa;
+  --surface-1: #ffffff;
+  --surface-2: #f1f2f5;
+  --hairline: #e6e8eb;
+  --hairline-strong: #d0d3d8;
+  --success: #16a34a;
+  --warning: #d97706;
+  --error: #dc2626;
+}
+
+* { box-sizing: border-box; }
+body {
+  font: 14px/1.55 "Inter", -apple-system, "Segoe UI", system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--canvas);
+  margin: 0;
+}
+
+.topbar {
+  display: flex; justify-content: space-between; align-items: center;
+  height: 56px; padding: 0 24px;
+  background: var(--surface-1); border-bottom: 1px solid var(--hairline);
+  position: sticky; top: 0; z-index: 10;
+}
+.brand { font-size: 15px; font-weight: 600; }
+.brand-sub { color: var(--ink-subtle); font-weight: 500; margin-left: 6px; }
+.container { max-width: 1200px; margin: 24px auto; padding: 0 24px; }
+
+.steps { display: flex; gap: 8px; list-style: none; padding: 0; margin: 0 0 16px; flex-wrap: wrap; }
+.step { padding: 6px 14px; border-radius: 9999px; background: var(--surface-1); border: 1px solid var(--hairline); color: var(--ink-subtle); font-size: 13px; cursor: pointer; }
+.step.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.step.done { color: var(--success); border-color: var(--success); }
+
+.card { background: var(--surface-1); border: 1px solid var(--hairline); border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+.card-title { font-size: 17px; font-weight: 600; margin: 0 0 12px; }
+.guide-h3 { font-size: 14px; font-weight: 600; margin: 16px 0 6px; }
+.hint { color: var(--ink-subtle); font-size: 13px; }
+.hidden { display: none; }
+
+label { display: block; margin: 10px 0; font-size: 13px; color: var(--ink-muted); }
+label.check { display: inline-flex; align-items: center; gap: 6px; margin: 4px 12px 4px 0; }
+input, select, textarea {
+  width: 100%; padding: 8px 12px; margin-top: 4px;
+  border: 1px solid var(--hairline); border-radius: 6px;
+  font: inherit; color: var(--ink); background: var(--surface-1);
+}
+label.check input { width: auto; margin-top: 0; }
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--primary); outline-offset: -1px; border-color: transparent; }
+textarea { font-family: "JetBrains Mono", ui-monospace, Consolas, monospace; font-size: 13px; }
+
+.btn { display: inline-block; padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; border: 1px solid transparent; margin-top: 8px; }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-hover); }
+.btn-ghost { background: transparent; color: var(--ink-muted); border-color: var(--hairline); }
+.btn-ghost:hover { background: var(--surface-2); }
+
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
+
+table.data { width: 100%; border-collapse: collapse; background: var(--surface-1); font-size: 13px; margin-top: 12px; }
+table.data th { background: var(--surface-2); color: var(--ink-subtle); font-weight: 500; font-size: 12px; text-align: left; padding: 6px 10px; }
+table.data td { border-top: 1px solid var(--hairline); padding: 6px 10px; color: var(--ink-muted); }
+table.data td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.badge { display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 12px; font-weight: 500; }
+.badge-success { color: var(--success); background: #e8f7ee; }
+.badge-error { color: var(--error); background: #fdecec; }
+.badge-warning { color: var(--warning); background: #fef3e2; }
+
+#report-frame { width: 100%; height: 80vh; border: 1px solid var(--hairline); border-radius: 10px; background: #fff; margin-top: 12px; }
+
+#runs-list { list-style: none; padding: 0; margin: 0; }
+#runs-list li { padding: 8px 0; border-bottom: 1px solid var(--hairline); font-size: 13px; }
+#runs-list a { color: var(--primary); text-decoration: none; font-family: "JetBrains Mono", ui-monospace, Consolas, monospace; }
+
+pre { background: var(--surface-2); padding: 12px; border-radius: 8px; font-size: 13px; overflow: auto; margin: 8px 0 0; white-space: pre-wrap; }
+
+@media (max-width: 768px) {
+  .form-grid { grid-template-columns: 1fr; }
+  .container { padding: 0 12px; }
+}

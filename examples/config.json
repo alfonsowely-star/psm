@@ -1,0 +1,10 @@
+{
+  "id_col": "session_id",
+  "treat_col": "agent",
+  "treat_value": 1,
+  "cov_cols": [
+    "member_level",
+    "prev_effective",
+    "intent"
+  ]
+}
