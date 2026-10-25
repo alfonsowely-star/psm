@@ -315,8 +315,12 @@ def att_dr(y, t, e, m0, clip_q=0.99):
     return att, m1, m1 - att
 
 
-def match_pairs(X, t):
-    """Mahalanobis 距离 1:1 最近邻匹配（with replacement）。返回 (mt, mc) 索引。"""
+def match_pairs(X, t, caliper=None):
+    """Mahalanobis 距离 1:1 最近邻匹配（无放回，贪心，可选卡尺）。
+
+    卡尺：只配「匹配距离 ≤ caliper」的对，配不上的 treated 丢弃（不硬配）。
+    默认 caliper = 最近邻距离的中位数。
+    """
     treated_idx = np.where(t == 1)[0]
     control_idx = np.where(t == 0)[0]
     if len(treated_idx) == 0 or len(control_idx) == 0:
@@ -330,9 +334,31 @@ def match_pairs(X, t):
     Zc = Xc @ L
     Zt = X[treated_idx] @ L
     tree = cKDTree(Zc)
-    _, j = tree.query(Zt, k=1)
-    j = np.atleast_1d(j)
-    return treated_idx, control_idx[j]
+
+    n_t = len(treated_idx)
+    n_c = len(control_idx)
+    K = min(n_c, 300)
+    dd, jj = tree.query(Zt, k=K)
+    dd = np.atleast_2d(dd)
+    jj = np.atleast_2d(jj)
+
+    if caliper is None:
+        caliper = float(np.median(dd[:, 0]))
+
+    order = np.argsort(dd[:, 0])  # 近的先配
+    used = np.zeros(n_c, dtype=bool)
+    mt, mc = [], []
+    for i in order:
+        for a in range(K):
+            if dd[i, a] > caliper:
+                break  # 更远的都不满足卡尺，放弃该 treated
+            c = jj[i, a]
+            if not used[c]:
+                used[c] = True
+                mt.append(treated_idx[i])
+                mc.append(control_idx[c])
+                break
+    return np.array(mt, dtype=int), np.array(mc, dtype=int)
 
 
 def att_matching(X, y, t, m0=None):

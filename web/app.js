@@ -67,19 +67,33 @@ $("#btn-parse").addEventListener("click", parseData);
 $("#btn-s2").addEventListener("click", () => { populateMapping(); showStep(2); });
 
 // ② 映射列
+function toggleEffectFields() {
+  $("#effect-fields").classList.toggle("hidden", !$("#c-effect").checked);
+}
+
 function populateMapping() {
   const opts = ['<option value=""></option>'].concat(columns.map((c) => `<option value="${esc(c.name)}">${esc(c.name)}</option>`)).join("");
   $("#c-id").innerHTML = opts;
   $("#c-treat").innerHTML = opts;
+  $("#c-outcome").innerHTML = opts;
+  $("#c-user").innerHTML = opts;
   $("#cov-checks").innerHTML = columns.map((c) => `<label class="check"><input type="checkbox" value="${esc(c.name)}"> ${esc(c.name)} <span class="hint">(${esc(c.type)})</span></label>`).join("");
   // 恢复上次的映射选择
   if (lastConfig) {
     $("#c-id").value = lastConfig.id_col || "";
     $("#c-treat").value = lastConfig.treat_col || "";
     $("#c-treatval").value = lastConfig.treat_value ?? "";
+    $("#c-outcome").value = lastConfig.outcome_col || "";
+    $("#c-user").value = lastConfig.user_col || "";
+    $("#c-effect").checked = Boolean(lastConfig.outcome_col);
+    if (lastConfig.binary !== undefined) $("#c-binary").value = lastConfig.binary ? "1" : "0";
+    if (lastConfig.B) $("#c-B").value = lastConfig.B;
+    if (lastConfig.N_perm) $("#c-N").value = lastConfig.N_perm;
     $$("#cov-checks input").forEach((cb) => { cb.checked = (lastConfig.cov_cols || []).includes(cb.value); });
   }
+  toggleEffectFields();
 }
+$("#c-effect").addEventListener("change", toggleEffectFields);
 
 $("#btn-run").addEventListener("click", async () => {
   const config = {
@@ -88,6 +102,13 @@ $("#btn-run").addEventListener("click", async () => {
     treat_value: $("#c-treatval").value.trim(),
     cov_cols: [...$$("#cov-checks input:checked")].map((i) => i.value),
   };
+  if ($("#c-effect").checked) {
+    config.outcome_col = $("#c-outcome").value || null;
+    config.user_col = $("#c-user").value || null;
+    config.binary = $("#c-binary").value === "1";
+    config.B = Number($("#c-B").value) || 200;
+    config.N_perm = Number($("#c-N").value) || 200;
+  }
   lastConfig = config;
   const cRes = await fetch("/api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(config) });
   const cj = await cRes.json();
@@ -107,11 +128,22 @@ $("#btn-run").addEventListener("click", async () => {
 function renderSummary(m) {
   const b = m.balance || {};
   const badge = b.balanced ? '<span class="badge badge-success">两组可比 ✓</span>' : '<span class="badge badge-error">不可比 ✗</span>';
-  const dl = currentRunId ? `<a class="btn btn-ghost" href="/api/cohort/${currentRunId}">下载配对结果 CSV</a>` : "";
-  $("#report-summary").innerHTML = `<div class="form-grid">
-    <div><div class="hint">配对结果</div>新 agent ${m.n_treated} 条 ↔ 老 agent ${m.n_control} 条，配成 <strong>${m.n_matched}</strong> 对</div>
-    <div><div class="hint">两组是否可比</div>${badge}（差异度 ${fmt(b.max_smd_after)}）</div>
-  </div>${dl}`;
+  if (m.estimates) {
+    $("#report-summary").innerHTML = `<div class="form-grid">
+      <div><div class="hint">真实效果 · 加权对比</div><strong>${fmt(m.estimates.ipw?.att)}</strong></div>
+      <div><div class="hint">真实效果 · 双重稳健</div>${fmt(m.estimates.dr?.att)}</div>
+      <div><div class="hint">真实效果 · 配对对比</div>${fmt(m.estimates.matching?.att)}</div>
+      <div><div class="hint">两组是否可比</div>${badge}（差异度 ${fmt(b.max_smd_after)}）</div>
+      <div><div class="hint">抗干扰指数</div>${fmt(m.evalue?.e_value)}</div>
+      <div><div class="hint">能检出的最小差异</div>${fmt(m.mde)}</div>
+    </div>`;
+  } else {
+    const dl = currentRunId ? `<a class="btn btn-ghost" href="/api/cohort/${currentRunId}">下载配对结果 CSV</a>` : "";
+    $("#report-summary").innerHTML = `<div class="form-grid">
+      <div><div class="hint">配对结果</div>新 agent ${m.n_treated} 条 ↔ 老 agent ${m.n_control} 条，配成 <strong>${m.n_matched}</strong> 对</div>
+      <div><div class="hint">两组是否可比</div>${badge}（差异度 ${fmt(b.max_smd_after)}）</div>
+    </div>${dl}`;
+  }
 }
 
 // 新手引导
@@ -131,9 +163,14 @@ function resetAll() {
   $("#run-status").textContent = "";
   $("#report-summary").innerHTML = "";
   $("#report-frame").src = "";
-  ["c-id", "c-treat"].forEach((id) => { $("#" + id).innerHTML = ""; });
+  ["c-id", "c-treat", "c-outcome", "c-user"].forEach((id) => { $("#" + id).innerHTML = ""; });
   $("#cov-checks").innerHTML = "";
   $("#c-treatval").value = "";
+  $("#c-effect").checked = false;
+  $("#effect-fields").classList.add("hidden");
+  $("#c-binary").value = "1";
+  $("#c-B").value = "200";
+  $("#c-N").value = "200";
   showStep(1);
 }
 $("#btn-restart").addEventListener("click", async () => {
@@ -157,7 +194,7 @@ async function loadRuns() {
   const res = await fetch("/api/runs");
   const j = await res.json();
   $("#runs-list").innerHTML = (j.runs || []).map((r) =>
-    `<li><a href="#" data-run="${esc(r.runId)}">${esc(r.runId)}</a> <span class="hint">配成 ${r.n_matched} 对 · ${r.balance?.balanced ? "两组可比✓" : "不可比✗"}</span></li>`
+    `<li><a href="#" data-run="${esc(r.runId)}">${esc(r.runId)}</a> <span class="hint">${r.estimates ? '效果分析' : `配成 ${r.n_matched} 对`} · ${r.balance?.balanced ? "两组可比✓" : "不可比✗"}</span></li>`
   ).join("");
   $$("#runs-list a").forEach((a) => a.addEventListener("click", async (e) => {
     e.preventDefault();
@@ -170,10 +207,19 @@ async function loadRuns() {
     if (j.reportData) {
       const b = j.reportData.balance_summary || {};
       const badge = b.balanced ? '<span class="badge badge-success">两组可比 ✓</span>' : '<span class="badge badge-error">不可比 ✗</span>';
-      $("#report-summary").innerHTML = `<div class="form-grid">
-        <div><div class="hint">配对结果</div>配成 <strong>${j.reportData.n_matched}</strong> 对</div>
-        <div><div class="hint">两组是否可比</div>${badge}（差异度 ${fmt(b.max_smd_after)}）</div>
-      </div><a class="btn btn-ghost" href="/api/cohort/${runId}">下载配对结果 CSV</a>`;
+      if (j.reportData.estimates) {
+        $("#report-summary").innerHTML = `<div class="form-grid">
+          <div><div class="hint">真实效果 · 加权对比</div><strong>${fmt(j.reportData.estimates.ipw?.att)}</strong></div>
+          <div><div class="hint">真实效果 · 双重稳健</div>${fmt(j.reportData.estimates.dr?.att)}</div>
+          <div><div class="hint">真实效果 · 配对对比</div>${fmt(j.reportData.estimates.matching?.att)}</div>
+          <div><div class="hint">两组是否可比</div>${badge}（差异度 ${fmt(b.max_smd_after)}）</div>
+        </div>`;
+      } else {
+        $("#report-summary").innerHTML = `<div class="form-grid">
+          <div><div class="hint">配对结果</div>配成 <strong>${j.reportData.n_matched}</strong> 对</div>
+          <div><div class="hint">两组是否可比</div>${badge}（差异度 ${fmt(b.max_smd_after)}）</div>
+        </div><a class="btn btn-ghost" href="/api/cohort/${runId}">下载配对结果 CSV</a>`;
+      }
     }
   }));
 }

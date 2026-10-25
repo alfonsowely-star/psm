@@ -77,6 +77,7 @@ function validateConfig(config, columns) {
   if (!Array.isArray(config.cov_cols) || config.cov_cols.length === 0) errs.push("维度（协变量）不能为空");
   else config.cov_cols.forEach((c) => { if (!names.has(c)) errs.push(`维度「${c}」不存在`); });
   if (config.treat_value == null || config.treat_value === "") errs.push("新 agent 取值未指定");
+  if (config.outcome_col && !names.has(config.outcome_col)) errs.push(`结局列「${config.outcome_col}」不存在`);
   return errs;
 }
 
@@ -139,7 +140,8 @@ async function handle(req, res) {
         res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
         return res.end(html);
       } catch {
-        return send(res, 404, { error: "找不到该运行" });
+        res.writeHead(404, { "Content-Type": "text/html; charset=utf-8" });
+        return res.end('<!doctype html><body style="font:14px system-ui,sans-serif;padding:24px;color:#555">报告还没生成好，或该运行不存在。请回到结果页重新运行，或点「历史运行」里其它记录。</body>');
       }
     }
     if (req.method === "GET" && p.startsWith("/api/cohort/")) {
@@ -168,6 +170,11 @@ async function handle(req, res) {
         treat_col: body.treat_col,
         treat_value: body.treat_value,
         cov_cols: body.cov_cols ?? [],
+        outcome_col: body.outcome_col || null,
+        user_col: body.user_col || null,
+        binary: body.binary !== false,
+        B: Math.min(1000, Math.max(0, Number(body.B) || 200)),
+        N_perm: Math.min(1000, Math.max(0, Number(body.N_perm) || 200)),
       };
       const errs = validateConfig(state.config, state.data.columns);
       return send(res, 200, { ok: true, config: state.config, errors: errs });

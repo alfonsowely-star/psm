@@ -18,31 +18,23 @@
 
   <main class="container">
     <section class="card hidden" id="guide-box">
-      <h2 class="card-title">新手引导 · 怎么填</h2>
-      <p>工具做一件事：把「新 agent 处理的进线」和「老 agent 处理的进线」，按维度配成<b>可比的两队</b>，输出谁配谁。</p>
+      <h2 class="card-title">新手引导</h2>
+      <p>新 agent 不是随机上线的，新老两拨人本来就不一样。工具给每条「新 agent 进线」在老 agent 里找一个<b>维度上最像的</b>配成一对，配完后两队才可比。</p>
 
-      <h3 class="guide-h3">原理 · 为什么不能直接比</h3>
-      <p>新 agent 不是随机上线的，它先推给了特定的人（高会员、特定意图等）。所以「新 agent 处理的进线」和「老 agent 处理的进线」<b>本来就不是一拨人</b>，直接比它们的结果不公平。</p>
-      <p><b>工具做的事</b>：给每条「新 agent 的进线」，在「老 agent 的进线」里找一个<b>其他维度上最像</b>的，配成一对。配完后两队就「长得一样」了（除了一个是新、一个是老）。你再拿这两队去比任何结果（转人工、满意度），差异才能归到 agent 本身，而不是人的差异。</p>
-      <div class="alert"><b>打个比方</b>：新教练只教尖子生、老教练教普通生。直接比考试成绩，新教练必胜——但那是学生底子好，不是教练好。工具就是给每个尖子生，在普通生里配一个「基础、学习时长都一样」的，配完再比谁进步大，才公平。</div>
+      <h3 class="guide-h3">三步</h3>
+      <p>① 粘贴数据（自动解析）→ ② 映射列 → ③ 运行。</p>
 
-      <h3 class="guide-h3">数据：一行 = 一条进线（实例）</h3>
+      <h3 class="guide-h3">必填字段</h3>
       <table class="data">
-        <tr><th>列</th><th>必需</th><th>含义</th></tr>
-        <tr><td>session_id / user_id</td><td>建议</td><td>实例 id（配对结果的标识）</td></tr>
-        <tr><td>agent</td><td><strong>必需</strong></td><td>谁处理的：新 agent=1，老 agent=0</td></tr>
-        <tr><td>member_level 等</td><td>维度</td><td>用来配对的进线特征，多选无妨</td></tr>
+        <tr><th>字段</th><th>填什么</th></tr>
+        <tr><td>实例列</td><td>每条进线的 id（如 session_id）</td></tr>
+        <tr><td>处理方列</td><td>谁新谁老（如 agent，新=1）</td></tr>
+        <tr><td>维度</td><td>用来配对的进线特征，勾上即可</td></tr>
       </table>
-      <h3 class="guide-h3">映射列怎么填</h3>
-      <table class="data">
-        <tr><th>字段</th><th>怎么填</th></tr>
-        <tr><td>实例列 id_col</td><td>选标识每条进线的那列（session_id 或 user_id）</td></tr>
-        <tr><td>处理方列 treat_col</td><td>选「谁被分到新 agent 灰度组」那列（0/1），不是实际谁处理</td></tr>
-        <tr><td>新 agent 取值</td><td>新 agent 在这列里的值：0/1 填 1，old/new 填 new</td></tr>
-        <tr><td>维度 cov_cols</td><td>勾「进线时就确定」的特征，多选无妨</td></tr>
-      </table>
-      <div class="alert"><strong>三条铁律</strong>：① 处理方列是唯一不可缺的列；② 「新 agent」填「是否被分到灰度组」（可以触发），<b>不要填「实际谁处理」（触发过）</b>——新 agent 会把难问题转人工，按实际处理算会把难问题踢掉、只剩简单问题；③ 维度只能放「进线时就已知」的特征。</div>
-      <p class="hint">完整文档：docs/GUIDE.md</p>
+
+      <div class="alert"><b>一条铁律</b>：「新 agent」填「是否被分到灰度组」，<b>不要填「实际谁处理」</b>——否则转人工的难问题会被踢掉、只剩简单问题，结果失真。</div>
+
+      <p class="hint">勾「是否输出效果」会多出结局/用户等字段；完整说明见 docs/GUIDE.md。</p>
     </section>
 
     <ol class="steps">
@@ -71,7 +63,19 @@
       </div>
       <label>维度 cov_cols（用来配对的进线特征，可多选）</label>
       <div id="cov-checks"></div>
-      <button class="btn btn-primary" id="btn-run">运行配对</button>
+      <label class="check"><input type="checkbox" id="c-effect"> 是否输出效果（新 agent 好多少 / 可不可信）</label>
+      <div id="effect-fields" class="hidden">
+        <div class="form-grid">
+          <label>结局列 outcome_col（转人工 / 满意度）<select id="c-outcome"></select></label>
+          <label>用户列 user_col（用于聚类，可选）<select id="c-user"></select></label>
+          <label>结局类型
+            <select id="c-binary"><option value="1">二值（0/1）</option><option value="0">连续</option></select>
+          </label>
+          <label>Bootstrap 次数 B <input id="c-B" type="number" value="200" min="0"></label>
+          <label>置换次数 N_perm <input id="c-N" type="number" value="200" min="0"></label>
+        </div>
+      </div>
+      <button class="btn btn-primary" id="btn-run">运行</button>
       <div id="run-status" class="hint"></div>
     </section>
 
