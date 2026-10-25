@@ -20,7 +20,7 @@ const PORT = Number(process.env.PORT) || 5175;
 
 const state = {
   data: null,       // { text, format, columns, rowCount }
-  config: null,     // { treatCol, treatValue, outcomeCol, covCols, userCol, timeCol, binary, B, N_perm }
+  config: null,     // { id_col, treat_col, treat_value, cov_cols, outcome_col, user_col, binary }
   lastRunId: null,
 };
 
@@ -173,8 +173,6 @@ async function handle(req, res) {
         outcome_col: body.outcome_col || null,
         user_col: body.user_col || null,
         binary: body.binary !== false,
-        B: Math.min(1000, Math.max(0, Number(body.B) || 200)),
-        N_perm: Math.min(1000, Math.max(0, Number(body.N_perm) || 200)),
       };
       const errs = validateConfig(state.config, state.data.columns);
       return send(res, 200, { ok: true, config: state.config, errors: errs });

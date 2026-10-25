@@ -12,7 +12,5 @@
     "wait_minutes",
     "prev_effective"
   ],
-  "binary": true,
-  "B": 200,
-  "N_perm": 200
+  "binary": true
 }

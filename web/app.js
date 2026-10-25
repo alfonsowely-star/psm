@@ -87,8 +87,6 @@ function populateMapping() {
     $("#c-user").value = lastConfig.user_col || "";
     $("#c-effect").checked = Boolean(lastConfig.outcome_col);
     if (lastConfig.binary !== undefined) $("#c-binary").value = lastConfig.binary ? "1" : "0";
-    if (lastConfig.B) $("#c-B").value = lastConfig.B;
-    if (lastConfig.N_perm) $("#c-N").value = lastConfig.N_perm;
     $$("#cov-checks input").forEach((cb) => { cb.checked = (lastConfig.cov_cols || []).includes(cb.value); });
   }
   toggleEffectFields();
@@ -106,8 +104,6 @@ $("#btn-run").addEventListener("click", async () => {
     config.outcome_col = $("#c-outcome").value || null;
     config.user_col = $("#c-user").value || null;
     config.binary = $("#c-binary").value === "1";
-    config.B = Number($("#c-B").value) || 200;
-    config.N_perm = Number($("#c-N").value) || 200;
   }
   lastConfig = config;
   const cRes = await fetch("/api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(config) });
@@ -128,14 +124,12 @@ $("#btn-run").addEventListener("click", async () => {
 function renderSummary(m) {
   const b = m.balance || {};
   const badge = b.balanced ? '<span class="badge badge-success">两组可比 ✓</span>' : '<span class="badge badge-error">不可比 ✗</span>';
-  if (m.estimates) {
+  if (m.effect) {
     $("#report-summary").innerHTML = `<div class="form-grid">
-      <div><div class="hint">真实效果 · 加权对比</div><strong>${fmt(m.estimates.ipw?.att)}</strong></div>
-      <div><div class="hint">真实效果 · 双重稳健</div>${fmt(m.estimates.dr?.att)}</div>
-      <div><div class="hint">真实效果 · 配对对比</div>${fmt(m.estimates.matching?.att)}</div>
+      <div><div class="hint">结局差异（新 − 老）</div><strong>${fmt(m.effect.att)}</strong></div>
+      <div><div class="hint">新 agent 队结局均值</div>${fmt(m.effect.mean_treated)}</div>
+      <div><div class="hint">老 agent 队结局均值</div>${fmt(m.effect.mean_control)}</div>
       <div><div class="hint">两组是否可比</div>${badge}（差异度 ${fmt(b.max_smd_after)}）</div>
-      <div><div class="hint">抗干扰指数</div>${fmt(m.evalue?.e_value)}</div>
-      <div><div class="hint">能检出的最小差异</div>${fmt(m.mde)}</div>
     </div>`;
   } else {
     const dl = currentRunId ? `<a class="btn btn-ghost" href="/api/cohort/${currentRunId}">下载配对结果 CSV</a>` : "";
@@ -169,8 +163,6 @@ function resetAll() {
   $("#c-effect").checked = false;
   $("#effect-fields").classList.add("hidden");
   $("#c-binary").value = "1";
-  $("#c-B").value = "200";
-  $("#c-N").value = "200";
   showStep(1);
 }
 $("#btn-restart").addEventListener("click", async () => {
@@ -194,7 +186,7 @@ async function loadRuns() {
   const res = await fetch("/api/runs");
   const j = await res.json();
   $("#runs-list").innerHTML = (j.runs || []).map((r) =>
-    `<li><a href="#" data-run="${esc(r.runId)}">${esc(r.runId)}</a> <span class="hint">${r.estimates ? '效果分析' : `配成 ${r.n_matched} 对`} · ${r.balance?.balanced ? "两组可比✓" : "不可比✗"}</span></li>`
+    `<li><a href="#" data-run="${esc(r.runId)}">${esc(r.runId)}</a> <span class="hint">${r.effect ? '效果分析' : `配成 ${r.n_matched} 对`} · ${r.balance?.balanced ? "两组可比✓" : "不可比✗"}</span></li>`
   ).join("");
   $$("#runs-list a").forEach((a) => a.addEventListener("click", async (e) => {
     e.preventDefault();
@@ -207,11 +199,11 @@ async function loadRuns() {
     if (j.reportData) {
       const b = j.reportData.balance_summary || {};
       const badge = b.balanced ? '<span class="badge badge-success">两组可比 ✓</span>' : '<span class="badge badge-error">不可比 ✗</span>';
-      if (j.reportData.estimates) {
+      if (j.reportData.effect) {
         $("#report-summary").innerHTML = `<div class="form-grid">
-          <div><div class="hint">真实效果 · 加权对比</div><strong>${fmt(j.reportData.estimates.ipw?.att)}</strong></div>
-          <div><div class="hint">真实效果 · 双重稳健</div>${fmt(j.reportData.estimates.dr?.att)}</div>
-          <div><div class="hint">真实效果 · 配对对比</div>${fmt(j.reportData.estimates.matching?.att)}</div>
+          <div><div class="hint">结局差异（新 − 老）</div><strong>${fmt(j.reportData.effect.att)}</strong></div>
+          <div><div class="hint">新 agent 队结局均值</div>${fmt(j.reportData.effect.mean_treated)}</div>
+          <div><div class="hint">老 agent 队结局均值</div>${fmt(j.reportData.effect.mean_control)}</div>
           <div><div class="hint">两组是否可比</div>${badge}（差异度 ${fmt(b.max_smd_after)}）</div>
         </div>`;
       } else {

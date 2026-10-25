@@ -137,7 +137,7 @@ oos = int(((agent == 1) & ((e_true < e_c.min()) | (e_true > e_c.max()))).sum())
 
 df.to_csv(OUT_CSV, index=False, encoding="utf-8")
 
-# 完整效应分析配置（供 psm.run_analysis / CLI）
+# 经典 PSM 效果分析配置（供 psm.run_matching_with_effect / CLI）
 cfg = {
     "id_col": "session_id",
     "user_col": "user_id",
@@ -147,8 +147,6 @@ cfg = {
     "cov_cols": ["member_level", "monthly_orders", "history_complaints",
                  "intent", "wait_minutes", "prev_effective"],
     "binary": True,
-    "B": 200,
-    "N_perm": 200,
 }
 with open(OUT_CFG, "w", encoding="utf-8") as f:
     json.dump(cfg, f, ensure_ascii=False, indent=2)

@@ -1,0 +1,1 @@
+﻿{"id_col": "session_id", "user_col": "user_id", "treat_col": "agent", "treat_value": 1, "outcome_col": "transferred", "cov_cols": ["member_level", "monthly_orders", "history_complaints", "intent", "wait_minutes", "prev_effective"], "binary": true}

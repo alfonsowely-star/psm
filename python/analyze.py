@@ -21,10 +21,10 @@ import psm
 
 def load_data(path):
     if path.endswith((".jsonl", ".ndjson")):
-        return pd.read_json(path, lines=True)
+        return pd.read_json(path, lines=True, encoding="utf-8-sig")
     if path.endswith(".json"):
-        return pd.read_json(path)
-    return pd.read_csv(path)
+        return pd.read_json(path, encoding="utf-8-sig")
+    return pd.read_csv(path, encoding="utf-8-sig")
 
 
 def _esc(s):
@@ -35,6 +35,17 @@ def _fmt(v, digits=4):
     if v is None or (isinstance(v, float) and np.isnan(v)):
         return "—"
     return f"{v:+.{digits}f}"
+
+
+def _jsonable(obj):
+    """递归把 float NaN/±Inf 转成 null，避免写出 JS JSON.parse 不认的非法 JSON。"""
+    if isinstance(obj, float):
+        return None if np.isnan(obj) or np.isinf(obj) else obj
+    if isinstance(obj, dict):
+        return {k: _jsonable(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_jsonable(v) for v in obj]
+    return obj
 
 
 def _love_plot(bal):
@@ -66,14 +77,6 @@ def _love_plot(bal):
     return "".join(parts)
 
 
-def _pairs_html(pairs):
-    rows = "".join(
-        f"<tr><td>{_esc(p['treated_id'])}</td><td>{_esc(p['control_id'])}</td></tr>"
-        for p in pairs[:50]
-    )
-    return rows
-
-
 def _balance_rows_html(bal):
     rows = []
     for r in bal:
@@ -86,35 +89,16 @@ def _balance_rows_html(bal):
     return "".join(rows)
 
 
-def _estimate_table(r):
-    est = r["estimates"]
-    ci = r["ci"]
-
-    def ci_cell(k):
-        c = ci.get(k)
-        return f"[{_fmt(c['lo'])}, {_fmt(c['hi'])}]" if c else "—"
-
-    rows = [
-        f"<tr><td>直接比两组（有偏差，仅供参考）</td><td>{_fmt(est['naive'])}</td><td>—</td></tr>",
-        f"<tr><td><b>加权对比</b>（IPTW，主）</td><td><b>{_fmt(est['ipw']['att'])}</b></td><td>{ci_cell('ipw')}</td></tr>",
-        f"<tr><td>双重稳健（AIPW）</td><td>{_fmt(est['dr']['att'])}</td><td>{ci_cell('dr')}</td></tr>",
-        f"<tr><td>配对对比（Mahalanobis）</td><td>{_fmt(est['matching']['att'])}</td><td>{ci_cell('matching')}</td></tr>",
-    ]
-    return "".join(rows)
-
-
 def render_effect_report(r, config, df):
     bsum = r["balance_summary"]
-    ev = r["evalue"]
-    perm = r["permutation"]
-    wd = r["weight_diagnostics"]
+    eff = r["effect"]
     cert_color = "#157f3d" if bsum["balanced"] else "#c0392b"
     cert_text = "✓ 两组可比" if bsum["balanced"] else f"✗ 不可比：{', '.join(bsum['imbalanced_covariates'])}"
     mbr = bsum["mean_bias_reduction"]
     mean_br_str = "—" if mbr is None or (isinstance(mbr, float) and np.isnan(mbr)) else f"{mbr*100:.0f}%"
-    t = psm.encode_treatment(df[config["treat_col"]], config["treat_value"])
-    X, _ = psm.encode_covariates(df, config["cov_cols"])
-    mt, mc = psm.match_pairs(X, t)
+    t = np.array(r["t"]).astype(float)
+    mt = np.array(r["mt"]).astype(int)
+    mc = np.array(r["mc"]).astype(int)
     dist_plots = "".join(_dist_plot(df, c, t, mt, mc) for c in config["cov_cols"])
 
     return f"""<!doctype html><html lang="zh-CN"><meta charset="utf-8">
@@ -131,27 +115,28 @@ table{{border-collapse:collapse;width:100%;background:#fff;font-size:13px;margin
 td,th{{border:1px solid #dbe3ec;padding:8px 12px;text-align:left}}
 th{{background:#e5eef8;font-weight:700}}
 .cert{{border:1px solid {cert_color};background:#fff;border-radius:10px;padding:14px 18px;font-size:16px;font-weight:700;color:{cert_color};margin:18px 0}}
-.warn{{background:#fff7e6;border:1px solid #f0d9a8;border-radius:8px;padding:10px 14px;font-size:13px;color:#7a5c1e;margin:12px 0}}
 svg{{background:#fff;border:1px solid #dbe3ec;border-radius:10px;margin:12px 0}}
 </style><body>
 
 <h1>Agent 效果对比报告</h1>
 <div class="meta">新 agent（{_esc(config['treat_col'])} = {_esc(config['treat_value'])}）vs 老 agent ·
-结局「{_esc(config['outcome_col'])}」 · 样本 {r['n']} 条（新 {r['n_treated']} / 老 {r['n_control']}）</div>
+结局「{_esc(config['outcome_col'])}」 · 样本 {r['n']} 条（新 {r['n_treated']} / 老 {r['n_control']}）· 配成 {r['n_matched']} 对</div>
 
-<h2>新 agent 的真实效果（三种算法互验）</h2>
-<table><tr><th>算法</th><th>效果（结局差异）</th><th>95% 置信区间</th></tr>{_estimate_table(r)}</table>
-<div class="warn">三种算法方向一致、结果相近，结论才可信。能检出的最小差异 = {_fmt(r['mde'])}（置信区间含 0 且最小可检出差异偏大 → 样本不够，别下「没差异」的结论）。</div>
+<h2>新 agent 的真实效果</h2>
+<div class="cards">
+<div class="card"><div class="v">{_fmt(eff['att'])}</div><div class="k">结局差异（新 − 老）</div></div>
+<div class="card"><div class="v">{_fmt(eff['mean_treated'])}</div><div class="k">新 agent 队结局均值</div></div>
+<div class="card"><div class="v">{_fmt(eff['mean_control'])}</div><div class="k">老 agent 队结局均值</div></div>
+</div>
+<p style="font-size:13px;color:#5a6b7d">效果在「卡尺匹配配平后的两队」上计算（新 agent 队 − 老 agent 队），已做偏差校正。</p>
 
 <h2>两组是否可比</h2>
 <div class="cert">{cert_text}</div>
 <div class="cards">
 <div class="card"><div class="v">{_fmt(bsum['max_smd_after'])}</div><div class="k">配平后最大差异度（&lt;0.1 即可比）</div></div>
 <div class="card"><div class="v">{mean_br_str}</div><div class="k">平均差异降低</div></div>
-<div class="card"><div class="v">{wd['ess']:.0f}</div><div class="k">有效样本量 / {r['n']}</div></div>
-<div class="card"><div class="v">{_fmt(r['auc'], 3)}</div><div class="k">分流模型区分度 AUC</div></div>
 </div>
-<p style="font-size:13px;color:#5a6b7d">橙=配平前，绿=配平后；点越靠近 0 说明两组越像。红色虚线为差异度 0.1。</p>
+<p style="font-size:13px;color:#5a6b7d">橙=配平前，绿=配平后；点越靠近 0 说明两队越像。红色虚线为差异度 0.1。</p>
 {_love_plot(r['balance'])}
 
 <h2>各组维度对比</h2>
@@ -160,15 +145,6 @@ svg{{background:#fff;border:1px solid #dbe3ec;border-radius:10px;margin:12px 0}}
 <h2>各维度的分布对比</h2>
 <p style="font-size:13px;color:#5a6b7d">配平前两组分布有差异，配平后应基本重合。</p>
 {dist_plots}
-
-<h2>结论可靠性</h2>
-<div class="cards">
-<div class="card"><div class="v">{_fmt(perm['p_value'], 3)}</div><div class="k">随机化验证 p</div></div>
-<div class="card"><div class="v">{_fmt(ev['e_value'], 2)}</div><div class="k">抗干扰指数（E-value）</div></div>
-<div class="card"><div class="v">{_fmt(r['mde'])}</div><div class="k">能检出的最小差异</div></div>
-<div class="card"><div class="v">{r['overlap']['treated_out_of_support']}</div><div class="k">支撑域外的新 agent 条数</div></div>
-</div>
-<p style="font-size:13px;color:#5a6b7d">随机化验证：把「谁用了新 agent」随机打乱 {perm['n_perm']} 次重算，观测效果 {_fmt(perm['observed_att'])}，零分布均值 {_fmt(perm['null_mean'])}。抗干扰指数越大，结论越能扛住「没观测到的因素」。</p>
 
 </body></html>"""
 
@@ -284,17 +260,21 @@ svg{{background:#fff;border:1px solid #dbe3ec;border-radius:10px;margin:12px 0}}
 </body></html>"""
 
 
-def build_cohort(df, config, r):
+def build_cohort(df, config):
+    """构建配对队列（谁配谁），用 Mahalanobis 卡尺匹配。"""
     id_col = config.get("id_col")
-    out = df.copy()
+    t = psm.encode_treatment(df[config["treat_col"]], config["treat_value"])
+    X, _ = psm.encode_covariates(df, config["cov_cols"])
+    mt, mc = psm.match_pairs(X, t)
     if id_col and id_col in df.columns:
-        out["row_id"] = df[id_col].astype(str)
+        ids = df[id_col].astype(str).tolist()
     else:
-        out["row_id"] = [str(i) for i in range(len(df))]
-    out["_treatment"] = r["t"]
-    # 新 agent 的配对结果；老 agent 该列为空
-    matched = dict((p["treated_id"], p["control_id"]) for p in r["pairs"])
-    out["matched_control_id"] = out.apply(lambda row: matched.get(str(row["row_id"])), axis=1)
+        ids = [str(i) for i in range(len(df))]
+    matched = dict((ids[i], ids[c]) for i, c in zip(mt, mc))
+    out = df.copy()
+    out["row_id"] = ids
+    out["_treatment"] = t.astype(int)
+    out["matched_control_id"] = [matched.get(x) for x in ids]
     return out
 
 
@@ -305,37 +285,40 @@ def main(argv):
     ap.add_argument("--outdir", required=True)
     args = ap.parse_args(argv)
 
-    with open(args.config, "r", encoding="utf-8") as f:
+    with open(args.config, "r", encoding="utf-8-sig") as f:
         config = json.load(f)
     df = load_data(args.data)
 
     os.makedirs(args.outdir, exist_ok=True)
 
     if config.get("outcome_col"):
-        # 完整效应分析（可选）
-        r = psm.run_analysis(df, config)
+        # 经典 PSM：卡尺匹配配平 + 在配平后的两队上算效果
+        r = psm.run_matching_with_effect(df, config)
+        d = df[df[config["outcome_col"]].notna()].reset_index(drop=True)
+        cohort = build_cohort(d, config)
         with open(os.path.join(args.outdir, "report.json"), "w", encoding="utf-8") as f:
-            json.dump(r, f, ensure_ascii=False, indent=2, default=float)
+            json.dump(_jsonable(r), f, ensure_ascii=False, indent=2, default=float)
         with open(os.path.join(args.outdir, "report.html"), "w", encoding="utf-8") as f:
-            f.write(render_effect_report(r, config, df))
+            f.write(render_effect_report(r, config, d))
+        cohort.to_json(os.path.join(args.outdir, "matched_cohort.jsonl"), orient="records", lines=True, force_ascii=False)
+        cohort.to_csv(os.path.join(args.outdir, "matched_cohort.csv"), index=False)
         manifest = {
             "config": config,
             "n": r["n"],
             "n_treated": r["n_treated"],
             "n_control": r["n_control"],
-            "auc": r["auc"],
+            "n_matched": r["n_matched"],
+            "n_matched_control_distinct": r["n_matched_control_distinct"],
+            "missing_outcome": r["missing_outcome"],
             "balance": r["balance_summary"],
-            "estimates": r["estimates"],
-            "evalue": r["evalue"],
-            "mde": r["mde"],
-            "permutation_p": r["permutation"]["p_value"],
+            "effect": r["effect"],
         }
     else:
         # 仅配平 + 配对
         r = psm.run_matching(df, config)
-        cohort = build_cohort(df, config, r)
+        cohort = build_cohort(df, config)
         with open(os.path.join(args.outdir, "report.json"), "w", encoding="utf-8") as f:
-            json.dump(r, f, ensure_ascii=False, indent=2, default=float)
+            json.dump(_jsonable(r), f, ensure_ascii=False, indent=2, default=float)
         with open(os.path.join(args.outdir, "report.html"), "w", encoding="utf-8") as f:
             f.write(render_report(r, config, df))
         cohort.to_json(os.path.join(args.outdir, "matched_cohort.jsonl"), orient="records", lines=True, force_ascii=False)
@@ -351,9 +334,9 @@ def main(argv):
         }
 
     with open(os.path.join(args.outdir, "manifest.json"), "w", encoding="utf-8") as f:
-        json.dump(manifest, f, ensure_ascii=False, indent=2, default=float)
+        json.dump(_jsonable(manifest), f, ensure_ascii=False, indent=2, default=float)
 
-    print(json.dumps(manifest, ensure_ascii=False, indent=2, default=float))
+    print(json.dumps(_jsonable(manifest), ensure_ascii=False, indent=2, default=float))
 
 
 if __name__ == "__main__":
